@@ -1,0 +1,226 @@
+#!/usr/bin/env node
+
+const fs = require("node:fs")
+const os = require("node:os")
+const path = require("node:path")
+
+const DEFAULT_BASE_URL = "http://127.0.0.1:4096"
+const DEFAULT_PROVIDER = "openai"
+const DEFAULT_MODEL = "gpt-5.4-mini"
+const DEFAULT_DIRECTORY = os.homedir()
+const DEFAULT_ENV_FILE = path.join(os.homedir(), ".config/opencode/server.env")
+const DEFAULT_SYSTEM = "Use browser tools when needed for current web info or page interaction. Otherwise answer directly and concisely."
+
+function usage(exitCode = 0) {
+  const stream = exitCode === 0 ? process.stdout : process.stderr
+  stream.write(`Usage: ocq [options] <prompt>
+
+Send one message to the local OpenCode server and print the assistant response.
+
+Options:
+  -s, --session <id>       Continue an existing session
+  -m, --model <model>      Model ID or provider/model (default: ${DEFAULT_PROVIDER}/${DEFAULT_MODEL})
+  -p, --provider <id>      Provider ID (default: ${DEFAULT_PROVIDER})
+  -d, --directory <path>   OpenCode directory context (default: ${DEFAULT_DIRECTORY})
+  -u, --url <url>          OpenCode server URL (default: ${DEFAULT_BASE_URL})
+      --env <path>         Server env file (default: ${DEFAULT_ENV_FILE})
+      --system <text>      System prompt override
+      --no-system          Do not send a system prompt
+      --agent <name>       OpenCode agent name
+      --title <title>      Title for newly-created session
+      --json               Print JSON { sessionID, messageID, text }
+  -h, --help               Show help
+
+Examples:
+  ocq "what changed in OpenCode recently?"
+  ocq --json "start a quick conversation"
+  ocq --session ses_abc123 "follow up"
+`)
+  process.exit(exitCode)
+}
+
+function fail(message, detail) {
+  process.stderr.write(`ocq: ${message}\n`)
+  if (detail) process.stderr.write(`${detail}\n`)
+  process.exit(1)
+}
+
+function parseArgs(argv) {
+  const opts = {
+    baseUrl: process.env.OPENCODE_SERVER_URL || DEFAULT_BASE_URL,
+    providerID: process.env.OCQ_PROVIDER || DEFAULT_PROVIDER,
+    modelID: process.env.OCQ_MODEL || DEFAULT_MODEL,
+    directory: process.env.OCQ_DIRECTORY || DEFAULT_DIRECTORY,
+    envFile: process.env.OCQ_ENV_FILE || DEFAULT_ENV_FILE,
+    system: process.env.OCQ_SYSTEM || DEFAULT_SYSTEM,
+    json: false,
+  }
+  const prompt = []
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    const next = () => {
+      const value = argv[++i]
+      if (!value) fail(`missing value for ${arg}`)
+      return value
+    }
+
+    if (arg === "--") {
+      prompt.push(...argv.slice(i + 1))
+      break
+    } else if (arg === "-h" || arg === "--help") {
+      usage(0)
+    } else if (arg === "-s" || arg === "--session") {
+      opts.sessionID = next()
+    } else if (arg === "-m" || arg === "--model") {
+      const value = next()
+      const slash = value.indexOf("/")
+      if (slash > 0) {
+        opts.providerID = value.slice(0, slash)
+        opts.modelID = value.slice(slash + 1)
+      } else {
+        opts.modelID = value
+      }
+    } else if (arg === "-p" || arg === "--provider") {
+      opts.providerID = next()
+    } else if (arg === "-d" || arg === "--directory") {
+      opts.directory = path.resolve(next())
+    } else if (arg === "-u" || arg === "--url") {
+      opts.baseUrl = next().replace(/\/+$/, "")
+    } else if (arg === "--env") {
+      opts.envFile = path.resolve(next())
+    } else if (arg === "--system") {
+      opts.system = next()
+    } else if (arg === "--no-system") {
+      opts.system = undefined
+    } else if (arg === "--agent") {
+      opts.agent = next()
+    } else if (arg === "--title") {
+      opts.title = next()
+    } else if (arg === "--json") {
+      opts.json = true
+    } else if (arg.startsWith("-")) {
+      fail(`unknown option ${arg}`)
+    } else {
+      prompt.push(arg)
+    }
+  }
+
+  opts.prompt = prompt.join(" ").trim()
+  if (!opts.prompt) usage(1)
+  return opts
+}
+
+function parseEnvFile(file) {
+  let text
+  try {
+    text = fs.readFileSync(file, "utf8")
+  } catch (error) {
+    fail(`cannot read env file: ${file}`, error.message)
+  }
+
+  const env = {}
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith("#")) continue
+
+    const match = line.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/)
+    if (!match) continue
+
+    let value = match[2].trim()
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1)
+    }
+    env[match[1]] = value
+  }
+  return env
+}
+
+function authHeader(opts) {
+  const env = parseEnvFile(opts.envFile)
+  const username = process.env.OPENCODE_SERVER_USERNAME || env.OPENCODE_SERVER_USERNAME
+  const password = process.env.OPENCODE_SERVER_PASSWORD || env.OPENCODE_SERVER_PASSWORD
+  if (!username || !password) fail(`missing OPENCODE_SERVER_USERNAME or OPENCODE_SERVER_PASSWORD in ${opts.envFile}`)
+  return `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`
+}
+
+async function request(opts, method, pathname, body) {
+  const url = new URL(pathname, opts.baseUrl)
+  url.searchParams.set("directory", opts.directory)
+
+  const response = await fetch(url, {
+    method,
+    headers: {
+      authorization: opts.authorization,
+      "content-type": "application/json",
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+
+  const text = await response.text()
+  let data
+  try {
+    data = text ? JSON.parse(text) : undefined
+  } catch {
+    data = text
+  }
+
+  if (!response.ok) {
+    const detail = typeof data === "string" ? data : JSON.stringify(data, null, 2)
+    fail(`${method} ${url.pathname} failed: HTTP ${response.status}`, detail)
+  }
+  return data
+}
+
+async function createSession(opts) {
+  const body = {}
+  if (opts.title) body.title = opts.title
+  const session = await request(opts, "POST", "/session", body)
+  if (!session?.id) fail("server did not return a session id")
+  return session.id
+}
+
+function textFromParts(parts) {
+  return (parts || [])
+    .filter((part) => part?.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("\n")
+    .trim()
+}
+
+async function sendPrompt(opts) {
+  const sessionID = opts.sessionID || await createSession(opts)
+  const body = {
+    model: {
+      providerID: opts.providerID,
+      modelID: opts.modelID,
+    },
+    parts: [
+      {
+        type: "text",
+        text: opts.prompt,
+      },
+    ],
+  }
+  if (opts.system) body.system = opts.system
+  if (opts.agent) body.agent = opts.agent
+
+  const result = await request(opts, "POST", `/session/${encodeURIComponent(sessionID)}/message`, body)
+  const text = textFromParts(result?.parts)
+  if (!text && result?.info?.error) fail("assistant returned an error", JSON.stringify(result.info.error, null, 2))
+  return { sessionID, messageID: result?.info?.id, text }
+}
+
+async function main() {
+  const opts = parseArgs(process.argv.slice(2))
+  opts.authorization = authHeader(opts)
+
+  const result = await sendPrompt(opts)
+  if (opts.json) {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
+  } else {
+    process.stdout.write(result.text ? `${result.text}\n` : "")
+  }
+}
+
+main().catch((error) => fail(error.message, error.stack))

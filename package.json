@@ -1,0 +1,26 @@
+{
+  "name": "@patrickfanella/ocq",
+  "version": "0.1.0",
+  "description": "Tiny CLI for one-shot prompts to a local OpenCode server.",
+  "bin": {
+    "ocq": "bin/ocq"
+  },
+  "files": [
+    "bin/ocq",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check": "node --check bin/ocq"
+  },
+  "keywords": [
+    "opencode",
+    "cli",
+    "ai",
+    "chat"
+  ]
+}
