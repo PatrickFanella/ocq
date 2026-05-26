@@ -17,7 +17,11 @@
   },
   "scripts": {
     "check": "node --check bin/ocq && node --check src/*.js && node --check test/*.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "ui:dev": "npm --prefix apps/ui run dev",
+    "ui:build": "npm --prefix apps/ui run build",
+    "ui:test": "npm --prefix apps/ui run test -- --run",
+    "check:all": "npm run check && npm test && npm run ui:build && npm run ui:test"
   },
   "keywords": [
     "opencode",

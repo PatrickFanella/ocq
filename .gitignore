@@ -8,3 +8,5 @@ npm-debug.log*
 *.env
 server.env
 .superpowers/
+apps/ui/dist/
+*.tsbuildinfo
