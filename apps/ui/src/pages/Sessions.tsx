@@ -6,9 +6,10 @@ import type { SessionDetail, SessionSummary } from '../lib/types'
 type SessionsProps = {
   sessions: SessionSummary[]
   selected?: SessionDetail
+  selectedId: string | null
   onSelect: (id: string) => void | Promise<void>
   client: GatewayClient | null
-  refreshSelected: () => Promise<void>
+  refreshSelected: (id?: string) => Promise<void>
   isRefreshing: boolean
   syncError: string | null
 }
@@ -21,14 +22,13 @@ function formatTimestamp(value: number | null) {
   }).format(value)
 }
 
-export function Sessions({ sessions, selected, onSelect, client, refreshSelected, isRefreshing, syncError }: SessionsProps) {
-  const selectedId = selected?.id
+export function Sessions({ sessions, selected, selectedId, onSelect, client, refreshSelected, isRefreshing, syncError }: SessionsProps) {
   const selectedSummary = sessions.find((session) => session.id === selectedId)
 
   async function send(prompt: string) {
     if (!client || !selected) return
     await client.sendSessionMessage(selected.id, prompt)
-    await refreshSelected()
+    await refreshSelected(selected.id)
   }
 
   return (

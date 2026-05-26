@@ -80,7 +80,7 @@ export function ChatPane({ session, onSend }: ChatPaneProps) {
             <p className="text-xs uppercase tracking-[0.35em] text-cyan-300/70">session chat</p>
             <h2 className="mt-2 truncate text-2xl font-semibold tracking-tight text-slate-50">{session.title}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              <span className="font-mono text-slate-500">{session.id}</span> · safe watch, detail loaded by GET only
+              <span className="font-mono text-slate-500">{session.id}</span> · safe watch, detail refreshed by GET polling
             </p>
           </div>
 
