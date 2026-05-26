@@ -8,10 +8,11 @@ const {
   authHeader,
   sendPrompt,
 } = require("./opencode")
-const { parseModelName, messagesToPrompt, chatCompletionResponse } = require("./openai")
+const { parseModelName, messagesToPrompt, chatCompletionResponse, streamTextChunks } = require("./openai")
 const { hasValidBearer } = require("./auth")
 const { createObservabilityState } = require("./observability")
 const { prometheusMetrics } = require("./metrics")
+const { startSse, writeSse, endSse } = require("./sse")
 
 const DEFAULT_GATEWAY_HOST = "127.0.0.1"
 const DEFAULT_GATEWAY_PORT = 8088
@@ -80,6 +81,9 @@ function readJson(req) {
 }
 
 async function handleChatCompletions(req, res, opts) {
+  const authHeaderFn = opts.authHeader || authHeader
+  const sendPromptFn = opts.sendPrompt || sendPrompt
+
   if (!requireBearer(req, res, opts)) {
     return
   }
@@ -89,11 +93,6 @@ async function handleChatCompletions(req, res, opts) {
     body = await readJson(req)
   } catch (error) {
     json(res, 400, errorBody(error.message))
-    return
-  }
-
-  if (body.stream === true) {
-    json(res, 400, errorBody("streaming is not supported yet", "invalid_request_error", "unsupported_stream"))
     return
   }
 
@@ -107,9 +106,42 @@ async function handleChatCompletions(req, res, opts) {
     return
   }
 
+  if (body.stream === true) {
+    opts.observability.counters.activeStreams += 1
+    try {
+      const authorization = authHeaderFn(opts)
+      const result = await sendPromptFn({
+        baseUrl: opts.baseUrl,
+        directory: opts.directory,
+        envFile: opts.envFile,
+        authorization,
+        providerID: model.providerID,
+        modelID: model.modelID,
+        prompt: prompt.prompt,
+        system: prompt.system,
+      })
+      res.setHeader("x-ocq-session", result.sessionID)
+      startSse(res)
+      for (const chunk of streamTextChunks(result.text, model.model)) {
+        writeSse(res, chunk)
+      }
+      writeSse(res, "[DONE]")
+      endSse(res)
+    } catch (error) {
+      if (!res.headersSent) {
+        json(res, 500, errorBody(error.message, "server_error"))
+      } else if (!res.writableEnded) {
+        endSse(res)
+      }
+    } finally {
+      opts.observability.counters.activeStreams -= 1
+    }
+    return
+  }
+
   try {
-    const authorization = authHeader(opts)
-    const result = await sendPrompt({
+    const authorization = authHeaderFn(opts)
+    const result = await sendPromptFn({
       baseUrl: opts.baseUrl,
       directory: opts.directory,
       envFile: opts.envFile,

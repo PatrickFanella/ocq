@@ -76,8 +76,38 @@ function chatCompletionResponse({ model, text }) {
   }
 }
 
+function chatCompletionChunk({ id, model, delta = {}, finishReason = null }) {
+  return {
+    id: id || `chatcmpl-${randomUUID()}`,
+    object: "chat.completion.chunk",
+    created: Math.floor(Date.now() / 1000),
+    model,
+    choices: [
+      {
+        index: 0,
+        delta,
+        finish_reason: finishReason,
+      },
+    ],
+  }
+}
+
+function streamTextChunks(text, model) {
+  const value = text == null ? "" : String(text)
+  const id = `chatcmpl-${randomUUID()}`
+  const chunks = [chatCompletionChunk({ id, model, delta: { role: "assistant" } })]
+  const parts = value.match(/\s+|\S+/g) || []
+  for (const part of parts) {
+    chunks.push(chatCompletionChunk({ id, model, delta: { content: part } }))
+  }
+  chunks.push(chatCompletionChunk({ id, model, delta: {}, finishReason: "stop" }))
+  return chunks
+}
+
 module.exports = {
   parseModelName,
   messagesToPrompt,
   chatCompletionResponse,
+  chatCompletionChunk,
+  streamTextChunks,
 }
