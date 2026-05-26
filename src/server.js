@@ -214,20 +214,26 @@ function createGatewayServer(options = {}) {
       return
     }
 
-    const sessionMatch = url.pathname.match(/^\/ocq\/sessions\/([^/]+)$/)
+    const sessionDetailMatch = url.pathname.match(/^\/ocq\/sessions\/([^/]+)$/)
+    const sessionMessageMatch = url.pathname.match(/^\/ocq\/sessions\/([^/]+)\/messages$/)
 
     if (req.method === "GET" && url.pathname === "/ocq/sessions") {
       await handleSessions(req, res, opts, { json, readJson, errorBody })
       return
     }
 
-    if (sessionMatch && req.method === "GET") {
-      await handleSessionDetail(req, res, opts, { json, readJson, errorBody }, decodeURIComponent(sessionMatch[1]))
+    if (sessionDetailMatch && req.method === "GET") {
+      await handleSessionDetail(req, res, opts, { json, readJson, errorBody }, decodeURIComponent(sessionDetailMatch[1]))
       return
     }
 
-    if (sessionMatch && req.method === "POST") {
-      await handleSessionMessage(req, res, opts, { json, readJson, errorBody }, decodeURIComponent(sessionMatch[1]))
+    if (sessionMessageMatch && req.method === "POST") {
+      await handleSessionMessage(req, res, opts, { json, readJson, errorBody }, decodeURIComponent(sessionMessageMatch[1]))
+      return
+    }
+
+    if (sessionDetailMatch && req.method === "POST") {
+      await handleSessionMessage(req, res, opts, { json, readJson, errorBody }, decodeURIComponent(sessionDetailMatch[1]))
       return
     }
 

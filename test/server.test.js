@@ -146,7 +146,7 @@ test("GET /ocq/sessions/:id observes without mutation", async () => {
   }
 })
 
-test("POST /ocq/sessions/:id forwards prompt", async () => {
+test("POST /ocq/sessions/:id/messages forwards prompt", async () => {
   let sent = false
   const { server, url } = await listen(createGatewayServer({
     gatewayKey: "secret",
@@ -159,7 +159,7 @@ test("POST /ocq/sessions/:id forwards prompt", async () => {
     },
   }))
   try {
-    const { response, body } = await jsonFetch(`${url}/ocq/sessions/ses_remote`, {
+    const { response, body } = await jsonFetch(`${url}/ocq/sessions/ses_remote/messages`, {
       method: "POST",
       headers: {
         authorization: "Bearer secret",
