@@ -96,12 +96,35 @@ ocq --json "start a quick conversation"
 ocq --session ses_abc123 "follow up"
 ocq --model openai/gpt-5.4-mini "quick answer"
 OCQ_GATEWAY_KEY=secret ocq serve --port 8088
+./bin/ocq serve --port 8088
 curl -s http://127.0.0.1:8088/health
 curl -s -H "Authorization: Bearer secret" \
   -H "Content-Type: application/json" \
   http://127.0.0.1:8088/v1/chat/completions \
   -d '{"model":"openai/gpt-5.4-mini","messages":[{"role":"user","content":"reply ok"}]}'
 ```
+
+## UI console
+
+- The UI lives in a separate Vite app under `apps/ui`.
+- Treat the UI as private service behind proxy auth; do not expose it directly.
+- The UI still uses the gateway API key for requests.
+- MVP storage is `localStorage` for the API key; assume the browser profile is trusted.
+
+Setup / dev:
+
+```sh
+npm --prefix apps/ui install
+OCQ_GATEWAY_KEY=secret ocq serve --port 8088
+npm run ui:dev
+```
+
+Safety notes:
+
+- Session selection is read-only; sending a prompt is the only mutation.
+- Keep request logs prompt-free by default.
+- Do not store secrets in metrics, logs, or docs.
+- `/metrics` is for Prometheus-style scraping; keep session/metrics views limited to operational data.
 
 ## Environment overrides
 
