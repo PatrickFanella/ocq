@@ -1,12 +1,13 @@
 {
   "name": "@patrickfanella/ocq",
   "version": "0.1.0",
-  "description": "Tiny CLI for one-shot prompts to a local OpenCode server.",
+  "description": "Tiny CLI and private OpenAI-compatible gateway for a local OpenCode server.",
   "bin": {
     "ocq": "bin/ocq"
   },
   "files": [
     "bin/ocq",
+    "src",
     "README.md",
     "LICENSE"
   ],
@@ -15,7 +16,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "check": "node --check bin/ocq"
+    "check": "node --check bin/ocq && node --check src/opencode.js && node --check src/openai.js && node --check src/server.js"
   },
   "keywords": [
     "opencode",

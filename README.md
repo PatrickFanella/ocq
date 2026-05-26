@@ -1,8 +1,8 @@
 # ocq
 
-Tiny CLI for one-shot prompts to a local OpenCode server.
+Tiny CLI and private OpenAI-compatible gateway for a local OpenCode server.
 
-`ocq` creates or continues an OpenCode session, sends one prompt, and prints the assistant response. It is useful for fast terminal questions and popup/chat wrappers.
+`ocq` creates or continues an OpenCode session, sends one prompt, and prints the assistant response. It can also run `ocq serve`, a small private HTTP gateway for tools that speak the OpenAI chat completions API.
 
 ## Requirements
 
@@ -48,6 +48,7 @@ Or run directly:
 
 ```sh
 ocq [options] <prompt>
+ocq serve [options]
 ```
 
 Options:
@@ -67,12 +68,25 @@ Options:
   -h, --help               Show help
 ```
 
+Serve options:
+
+```text
+      --host <host>        Gateway bind host
+      --port <port>        Gateway bind port
+      --key <key>          Gateway bearer key
+  -m, --model <model>      Default gateway model provider/model
+  -d, --directory <path>   OpenCode directory context
+  -u, --url <url>          OpenCode server URL
+      --env <path>         Server env file
+```
+
 Defaults:
 
 - URL: `http://127.0.0.1:4096`
 - provider/model: `openai/gpt-5.4-mini`
 - directory: `$HOME`
 - env file: `~/.config/opencode/server.env`
+- gateway bind: `127.0.0.1:8088`
 
 ## Examples
 
@@ -81,6 +95,12 @@ ocq "what changed in OpenCode recently?"
 ocq --json "start a quick conversation"
 ocq --session ses_abc123 "follow up"
 ocq --model openai/gpt-5.4-mini "quick answer"
+OCQ_GATEWAY_KEY=secret ocq serve --port 8088
+curl -s http://127.0.0.1:8088/health
+curl -s -H "Authorization: Bearer secret" \
+  -H "Content-Type: application/json" \
+  http://127.0.0.1:8088/v1/chat/completions \
+  -d '{"model":"openai/gpt-5.4-mini","messages":[{"role":"user","content":"reply ok"}]}'
 ```
 
 ## Environment overrides
@@ -94,6 +114,11 @@ OCQ_MODEL=gpt-5.4-mini
 OCQ_DIRECTORY=$HOME
 OCQ_ENV_FILE=$HOME/.config/opencode/server.env
 OCQ_SYSTEM="Use browser tools when needed. Otherwise answer concisely."
+OCQ_GATEWAY_HOST=127.0.0.1
+OCQ_GATEWAY_PORT=8088
+OCQ_GATEWAY_KEY=...
+OCQ_DEFAULT_MODEL=openai/gpt-5.4-mini
+OCQ_DEFAULT_DIRECTORY=$HOME
 ```
 
 ## License
