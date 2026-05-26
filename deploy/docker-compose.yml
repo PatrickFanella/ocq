@@ -1,0 +1,28 @@
+services:
+  ocq-gateway:
+    build:
+      context: ..
+      dockerfile: Dockerfile.gateway
+    container_name: ocq-gateway
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      OPENCODE_SERVER_URL: http://host.docker.internal:4096
+      OCQ_ENV_FILE: /run/secrets/opencode-server.env
+      OCQ_DEFAULT_DIRECTORY: /home/onnwee
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - ./opencode-server.env:/run/secrets/opencode-server.env:ro
+    ports:
+      - "10.0.0.56:3034:8088"
+
+  ocq-ui:
+    build:
+      context: ..
+      dockerfile: apps/ui/Dockerfile
+    container_name: ocq-ui
+    restart: unless-stopped
+    ports:
+      - "10.0.0.56:3033:80"
