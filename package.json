@@ -16,7 +16,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "check": "node --check bin/ocq && node --check src/opencode.js && node --check src/openai.js && node --check src/server.js"
+    "check": "node --check bin/ocq && node --check src/*.js && node --check test/*.js",
+    "test": "node --test test/*.test.js"
   },
   "keywords": [
     "opencode",
