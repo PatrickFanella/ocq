@@ -1,5 +1,4 @@
 const http = require("node:http")
-const { timingSafeEqual } = require("node:crypto")
 const {
   DEFAULT_BASE_URL,
   DEFAULT_PROVIDER,
@@ -10,6 +9,9 @@ const {
   sendPrompt,
 } = require("./opencode")
 const { parseModelName, messagesToPrompt, chatCompletionResponse } = require("./openai")
+const { hasValidBearer } = require("./auth")
+const { createObservabilityState } = require("./observability")
+const { prometheusMetrics } = require("./metrics")
 
 const DEFAULT_GATEWAY_HOST = "127.0.0.1"
 const DEFAULT_GATEWAY_PORT = 8088
@@ -44,14 +46,12 @@ function errorBody(message, type = "invalid_request_error", code) {
   return { error: { message, type, code } }
 }
 
-function hasValidBearer(req, gatewayKey) {
-  if (!gatewayKey) return false
-  const prefix = "Bearer "
-  const header = req.headers.authorization || ""
-  if (!header.startsWith(prefix)) return false
-  const actual = Buffer.from(header.slice(prefix.length))
-  const expected = Buffer.from(gatewayKey)
-  return actual.length === expected.length && timingSafeEqual(actual, expected)
+function requireBearer(req, res, opts) {
+  if (hasValidBearer(req, opts.gatewayKey)) return true
+  json(res, 401, errorBody("missing or invalid bearer token", "authentication_error", "unauthorized"), {
+    "www-authenticate": "Bearer",
+  })
+  return false
 }
 
 function readJson(req) {
@@ -80,10 +80,7 @@ function readJson(req) {
 }
 
 async function handleChatCompletions(req, res, opts) {
-  if (!hasValidBearer(req, opts.gatewayKey)) {
-    json(res, 401, errorBody("missing or invalid bearer token", "authentication_error", "unauthorized"), {
-      "www-authenticate": "Bearer",
-    })
+  if (!requireBearer(req, res, opts)) {
     return
   }
 
@@ -132,11 +129,60 @@ async function handleChatCompletions(req, res, opts) {
 
 function createGatewayServer(options = {}) {
   const opts = getServerOptions(options)
+  opts.observability = options.observability || createObservabilityState()
+  opts.authHeader = options.authHeader
+  opts.sendPrompt = options.sendPrompt
+  opts.listSessions = options.listSessions
+  opts.getSession = options.getSession
   return http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || `${opts.host}:${opts.port}`}`)
+    const startedAt = process.hrtime.bigint()
+
+    res.on("finish", () => {
+      const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6
+      opts.observability.recordRequest({
+        method: req.method,
+        path: url.pathname,
+        status: res.statusCode,
+        durationMs,
+        headers: req.headers,
+      })
+      if (res.statusCode >= 500) {
+        opts.observability.log("error", `${req.method} ${url.pathname} -> ${res.statusCode}`, {
+          method: req.method,
+          path: url.pathname,
+          status: res.statusCode,
+        })
+      }
+    })
 
     if (req.method === "GET" && url.pathname === "/health") {
       json(res, 200, { ok: true })
+      return
+    }
+
+    if (url.pathname.startsWith("/ocq/") || url.pathname === "/metrics") {
+      if (!requireBearer(req, res, opts)) return
+    }
+
+    if (req.method === "GET" && url.pathname === "/ocq/metrics") {
+      json(res, 200, opts.observability.summary())
+      return
+    }
+
+    if (req.method === "GET" && url.pathname === "/ocq/requests") {
+      json(res, 200, { requests: opts.observability.requests.list() })
+      return
+    }
+
+    if (req.method === "GET" && url.pathname === "/ocq/logs") {
+      json(res, 200, { logs: opts.observability.logs.list() })
+      return
+    }
+
+    if (req.method === "GET" && url.pathname === "/metrics") {
+      res.writeHead(200, { "content-type": "text/plain; version=0.0.4; charset=utf-8" })
+      res.end(prometheusMetrics(opts.observability))
       return
     }
 

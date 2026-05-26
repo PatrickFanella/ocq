@@ -20,8 +20,15 @@ async function jsonFetch(url, options = {}) {
 }
 
 function createMockOpenCode(handler) {
-  return http.createServer(async (req, res) => {
-    await handler(req, res)
+  return http.createServer((req, res) => {
+    Promise.resolve(handler(req, res)).catch((error) => {
+      if (res.headersSent || res.writableEnded) {
+        res.destroy(error)
+        return
+      }
+      res.writeHead(500, { "content-type": "application/json; charset=utf-8" })
+      res.end(JSON.stringify({ error: { message: error.message } }))
+    })
   })
 }
 
