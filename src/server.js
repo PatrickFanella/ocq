@@ -232,11 +232,6 @@ function createGatewayServer(options = {}) {
       return
     }
 
-    if (sessionDetailMatch && req.method === "POST") {
-      await handleSessionMessage(req, res, opts, { json, readJson, errorBody }, decodeURIComponent(sessionDetailMatch[1]))
-      return
-    }
-
     if (req.method === "GET" && url.pathname === "/metrics") {
       res.writeHead(200, { "content-type": "text/plain; version=0.0.4; charset=utf-8" })
       res.end(prometheusMetrics(opts.observability))

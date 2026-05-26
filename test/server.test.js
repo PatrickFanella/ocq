@@ -146,6 +146,29 @@ test("GET /ocq/sessions/:id observes without mutation", async () => {
   }
 })
 
+test("POST /ocq/sessions/:id is not a mutating alias", async () => {
+  let sent = false
+  const { server, url } = await listen(createGatewayServer({
+    gatewayKey: "secret",
+    authHeader: () => "Basic test",
+    sendPrompt: async () => { sent = true },
+  }))
+  try {
+    const { response } = await jsonFetch(`${url}/ocq/sessions/ses_remote`, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer secret",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ prompt: "continue" }),
+    })
+    assert.equal(response.status >= 200 && response.status < 300, false)
+    assert.equal(sent, false)
+  } finally {
+    await close(server)
+  }
+})
+
 test("POST /ocq/sessions/:id/messages forwards prompt", async () => {
   let sent = false
   const { server, url } = await listen(createGatewayServer({
@@ -170,6 +193,24 @@ test("POST /ocq/sessions/:id/messages forwards prompt", async () => {
     assert.equal(response.status, 200)
     assert.equal(body.sessionID, "ses_remote")
     assert.equal(sent, true)
+  } finally {
+    await close(server)
+  }
+})
+
+test("POST /ocq/sessions/:id/messages rejects missing bearer", async () => {
+  const { server, url } = await listen(createGatewayServer({
+    gatewayKey: "secret",
+    authHeader: () => "Basic test",
+  }))
+  try {
+    const { response, body } = await jsonFetch(`${url}/ocq/sessions/ses_remote/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ prompt: "continue" }),
+    })
+    assert.equal(response.status, 401)
+    assert.equal(body.error.code, "unauthorized")
   } finally {
     await close(server)
   }
