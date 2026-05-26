@@ -34,14 +34,18 @@ async function parseBody(response: Response) {
 
 export function createGatewayClient(baseUrl: string, apiKey: string) {
   const root = normalizeBaseUrl(baseUrl)
+  const bearer = apiKey.trim()
 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const headers = new Headers(init.headers)
+    if (bearer) headers.set('authorization', `Bearer ${bearer}`)
+    if (init.body !== undefined && !headers.has('content-type')) headers.set('content-type', 'application/json')
+
     const response = await fetch(`${root}${path}`, {
       ...init,
+      credentials: 'same-origin',
       headers: {
-        ...mergeHeaders(init.headers),
-        authorization: `Bearer ${apiKey}`,
-        'content-type': 'application/json',
+        ...mergeHeaders(headers),
       },
     })
 
@@ -70,6 +74,15 @@ export function createGatewayClient(baseUrl: string, apiKey: string) {
       request<{ sessionID: string; messageID?: string; text: string }>(`/ocq/sessions/${encodeURIComponent(id)}/messages`, {
         method: 'POST',
         body: JSON.stringify({ prompt }),
+      }),
+    login: (loginKey: string) =>
+      request<void>('/ocq/ui/session', {
+        method: 'POST',
+        body: JSON.stringify({ apiKey: loginKey }),
+      }),
+    logout: () =>
+      request<void>('/ocq/ui/session', {
+        method: 'DELETE',
       }),
   }
 }

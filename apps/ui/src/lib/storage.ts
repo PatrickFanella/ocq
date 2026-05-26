@@ -14,12 +14,18 @@ export function loadSettings(storage: Storage = localStorage): Settings {
   if (!raw) return DEFAULT_SETTINGS
 
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) }
+    const parsed = JSON.parse(raw) as Partial<Settings>
+    return {
+      ...DEFAULT_SETTINGS,
+      ...parsed,
+      apiKey: '',
+    }
   } catch {
     return DEFAULT_SETTINGS
   }
 }
 
 export function saveSettings(settings: Settings, storage: Storage = localStorage) {
-  storage.setItem(KEY, JSON.stringify(settings))
+  const { apiKey: _apiKey, ...persisted } = settings
+  storage.setItem(KEY, JSON.stringify(persisted))
 }

@@ -29,7 +29,6 @@ export function App() {
 
   const refreshMs = Math.max(1000, Number(settings.refreshMs) || 3000)
   const client = useMemo(() => {
-    if (!settings.apiKey.trim()) return null
     return createGatewayClient(settings.baseUrl.trim(), settings.apiKey.trim())
   }, [settings.apiKey, settings.baseUrl])
 
@@ -105,6 +104,17 @@ export function App() {
     setSelectedSession(detail.session)
   }
 
+  async function handleLogin(apiKey: string) {
+    await client.login(apiKey)
+    setSettings((current) => ({ ...current, apiKey: '' }))
+    setSyncError(null)
+  }
+
+  async function handleLogout() {
+    await client.logout()
+    setSyncError(null)
+  }
+
   const connectionState = client
     ? syncError
       ? 'warning'
@@ -158,7 +168,9 @@ export function App() {
           syncError={syncError}
         />
       )}
-      {tab === 'Settings' && <SettingsPanel settings={settings} onChange={setSettings} />}
+      {tab === 'Settings' && (
+        <SettingsPanel settings={settings} onChange={setSettings} onLogin={handleLogin} onLogout={handleLogout} />
+      )}
     </Shell>
   )
 }

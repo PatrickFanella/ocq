@@ -1,6 +1,7 @@
 const test = require("node:test")
 const assert = require("node:assert/strict")
 const { createGatewayServer } = require("../src/server")
+const { signUiSession } = require("../src/auth")
 const { listen, close, jsonFetch } = require("./helpers")
 
 test("GET /health returns ok", async () => {
@@ -24,6 +25,74 @@ test("POST /v1/chat/completions rejects missing bearer", async () => {
     })
     assert.equal(response.status, 401)
     assert.equal(body.error.code, "unauthorized")
+  } finally {
+    await close(server)
+  }
+})
+
+test("POST /ocq/ui/session returns ui session cookie", async () => {
+  const { server, url } = await listen(createGatewayServer({ gatewayKey: "secret" }))
+  try {
+    const response = await fetch(`${url}/ocq/ui/session`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ apiKey: "secret" }),
+    })
+
+    assert.equal(response.status, 204)
+    const setCookie = response.headers.get("set-cookie")
+    assert.match(setCookie, /ocq_ui_session=/)
+    assert.match(setCookie, /HttpOnly/)
+    assert.match(setCookie, /SameSite=Lax/)
+  } finally {
+    await close(server)
+  }
+})
+
+test("GET /ocq/metrics accepts ui session cookie", async () => {
+  const { server, url } = await listen(createGatewayServer({ gatewayKey: "secret" }))
+  try {
+    const cookie = `ocq_ui_session=${signUiSession("secret")}`
+    const { response, body } = await jsonFetch(`${url}/ocq/metrics`, {
+      headers: { cookie },
+    })
+    assert.equal(response.status, 200)
+    assert.equal(typeof body.uptimeSeconds, "number")
+    assert.equal(body.activeStreams, 0)
+    assert.ok(Array.isArray(body.latencyBuckets))
+  } finally {
+    await close(server)
+  }
+})
+
+test("POST /ocq/ui/session rejects invalid key without cookie", async () => {
+  const { server, url } = await listen(createGatewayServer({ gatewayKey: "secret" }))
+  try {
+    const response = await fetch(`${url}/ocq/ui/session`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ apiKey: "nope" }),
+    })
+
+    assert.equal(response.status, 401)
+    assert.equal(response.headers.get("set-cookie"), null)
+  } finally {
+    await close(server)
+  }
+})
+
+test("DELETE /ocq/ui/session clears cookie", async () => {
+  const { server, url } = await listen(createGatewayServer({ gatewayKey: "secret" }))
+  try {
+    const response = await fetch(`${url}/ocq/ui/session`, {
+      method: "DELETE",
+      headers: { cookie: `ocq_ui_session=${signUiSession("secret")}` },
+    })
+
+    assert.equal(response.status, 204)
+    const setCookie = response.headers.get("set-cookie")
+    assert.match(setCookie, /ocq_ui_session=/)
+    assert.match(setCookie, /Max-Age=0/)
   } finally {
     await close(server)
   }

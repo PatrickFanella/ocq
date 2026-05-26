@@ -22,7 +22,50 @@ it('sends bearer auth to metrics endpoint', async () => {
   expect(fetchMock).toHaveBeenCalledWith(
     'http://gateway/ocq/metrics',
     expect.objectContaining({
+      credentials: 'same-origin',
       headers: expect.objectContaining({ authorization: 'Bearer secret' }),
+    }),
+  )
+
+  fetchMock.mockRestore()
+})
+
+it('omits bearer auth when empty and supports login/logout', async () => {
+  const fetchMock = vi
+    .spyOn(globalThis, 'fetch')
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ uptimeSeconds: 1, requestsTotal: 0, errorsTotal: 0, activeStreams: 0, p95LatencyMs: 0, latencyBuckets: [] }), { status: 200 }))
+
+  const client = createGatewayClient('http://gateway', '')
+  await client.login('secret')
+  await client.logout()
+  await client.metrics()
+
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    1,
+    'http://gateway/ocq/ui/session',
+    expect.objectContaining({
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: expect.not.objectContaining({ authorization: expect.any(String) }),
+    }),
+  )
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    2,
+    'http://gateway/ocq/ui/session',
+    expect.objectContaining({
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: expect.not.objectContaining({ authorization: expect.any(String) }),
+    }),
+  )
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    3,
+    'http://gateway/ocq/metrics',
+    expect.objectContaining({
+      credentials: 'same-origin',
+      headers: expect.not.objectContaining({ authorization: expect.any(String) }),
     }),
   )
 

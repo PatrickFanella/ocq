@@ -9,7 +9,7 @@ const {
   sendPrompt,
 } = require("./opencode")
 const { parseModelName, messagesToPrompt, chatCompletionResponse, streamTextChunks } = require("./openai")
-const { hasValidBearer } = require("./auth")
+const { hasValidBearer, hasValidUiSession, matchesGatewayKey, signUiSession } = require("./auth")
 const { createObservabilityState } = require("./observability")
 const { prometheusMetrics } = require("./metrics")
 const { startSse, writeSse, endSse } = require("./sse")
@@ -48,8 +48,28 @@ function errorBody(message, type = "invalid_request_error", code) {
   return { error: { message, type, code } }
 }
 
-function requireBearer(req, res, opts) {
-  if (hasValidBearer(req, opts.gatewayKey)) return true
+function isSecureRequest(req) {
+  const forwardedProto = req.headers["x-forwarded-proto"]
+  if (typeof forwardedProto === "string") {
+    return forwardedProto.split(",")[0].trim() === "https"
+  }
+  return Boolean(req.socket?.encrypted)
+}
+
+function buildUiSessionCookie(value, { secure, maxAge, expires } = {}) {
+  const cookie = [`ocq_ui_session=${value}`, "Path=/", "HttpOnly", "SameSite=Lax"]
+  if (secure) cookie.push("Secure")
+  if (typeof maxAge === "number") cookie.push(`Max-Age=${Math.max(0, Math.floor(maxAge))}`)
+  if (expires instanceof Date) cookie.push(`Expires=${expires.toUTCString()}`)
+  return cookie.join("; ")
+}
+
+function hasGatewayAccess(req, gatewayKey) {
+  return hasValidBearer(req, gatewayKey) || hasValidUiSession(req, gatewayKey)
+}
+
+function requireGatewayAccess(req, res, opts) {
+  if (hasGatewayAccess(req, opts.gatewayKey)) return true
   json(res, 401, errorBody("missing or invalid bearer token", "authentication_error", "unauthorized"), {
     "www-authenticate": "Bearer",
   })
@@ -85,7 +105,7 @@ async function handleChatCompletions(req, res, opts) {
   const authHeaderFn = opts.authHeader || authHeader
   const sendPromptFn = opts.sendPrompt || sendPrompt
 
-  if (!requireBearer(req, res, opts)) {
+  if (!requireGatewayAccess(req, res, opts)) {
     return
   }
 
@@ -195,8 +215,45 @@ function createGatewayServer(options = {}) {
       return
     }
 
-    if (url.pathname.startsWith("/ocq/") || url.pathname === "/metrics") {
-      if (!requireBearer(req, res, opts)) return
+    if (req.method === "POST" && url.pathname === "/ocq/ui/session") {
+      let body
+      try {
+        body = await readJson(req)
+      } catch (error) {
+        json(res, 400, errorBody(error.message))
+        return
+      }
+
+      if (!matchesGatewayKey(body.apiKey, opts.gatewayKey)) {
+        json(res, 401, errorBody("invalid api key", "authentication_error", "unauthorized"), {
+          "www-authenticate": "Bearer",
+        })
+        return
+      }
+
+      res.writeHead(204, {
+        "set-cookie": buildUiSessionCookie(signUiSession(opts.gatewayKey), { secure: isSecureRequest(req) }),
+        "cache-control": "no-store",
+      })
+      res.end()
+      return
+    }
+
+    if (req.method === "DELETE" && url.pathname === "/ocq/ui/session") {
+      res.writeHead(204, {
+        "set-cookie": buildUiSessionCookie("", {
+          secure: isSecureRequest(req),
+          maxAge: 0,
+          expires: new Date(0),
+        }),
+        "cache-control": "no-store",
+      })
+      res.end()
+      return
+    }
+
+    if ((url.pathname.startsWith("/ocq/") || url.pathname === "/metrics") && url.pathname !== "/ocq/ui/session") {
+      if (!requireGatewayAccess(req, res, opts)) return
     }
 
     if (req.method === "GET" && url.pathname === "/ocq/metrics") {

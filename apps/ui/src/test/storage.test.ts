@@ -18,7 +18,7 @@ function createStorage() {
   } as Storage
 }
 
-it('saves and loads settings', () => {
+it('saves settings without api key and loads session-safe defaults', () => {
   const storage = createStorage()
 
   const settings = {
@@ -30,7 +30,13 @@ it('saves and loads settings', () => {
 
   saveSettings(settings, storage)
 
-  expect(loadSettings(storage)).toEqual(settings)
+  expect(storage.getItem('ocq.ui.settings.v1')).toBe(JSON.stringify({ baseUrl: 'http://x', refreshMs: 1000, theme: 'dark' }))
+  expect(loadSettings(storage)).toEqual({
+    baseUrl: 'http://x',
+    apiKey: '',
+    refreshMs: 1000,
+    theme: 'dark',
+  })
 })
 
 it('falls back on invalid JSON', () => {
