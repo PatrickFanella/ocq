@@ -91,6 +91,16 @@ async function createSession(opts) {
   return session.id
 }
 
+function normalizeSession(session) {
+  return {
+    id: session?.id,
+    title: session?.title || session?.id,
+    createdAt: session?.time?.created || session?.createdAt || null,
+    updatedAt: session?.time?.updated || session?.updatedAt || null,
+    observeOnly: true,
+  }
+}
+
 function textFromParts(parts) {
   return (parts || [])
     .filter((part) => part?.type === "text" && typeof part.text === "string")
@@ -124,6 +134,29 @@ async function sendPrompt(opts) {
   return { sessionID, messageID: result?.info?.id, text }
 }
 
+function normalizeMessage(message) {
+  return {
+    id: message?.id || message?.info?.id || null,
+    role: message?.role || message?.info?.role || "assistant",
+    content: textFromParts(message?.parts || (typeof message?.content === "string" ? [{ type: "text", text: message.content }] : [])),
+    raw: message,
+  }
+}
+
+async function listSessions(opts) {
+  const sessions = await request(opts, "GET", "/session")
+  const list = Array.isArray(sessions) ? sessions : sessions?.sessions || []
+  return list.map(normalizeSession)
+}
+
+async function getSession(opts, sessionID) {
+  const session = await request(opts, "GET", `/session/${encodeURIComponent(sessionID)}`)
+  return {
+    ...normalizeSession(session),
+    messages: (session?.messages || session?.children || []).map(normalizeMessage),
+  }
+}
+
 module.exports = {
   DEFAULT_BASE_URL,
   DEFAULT_PROVIDER,
@@ -136,6 +169,10 @@ module.exports = {
   authHeader,
   request,
   createSession,
+  normalizeSession,
+  normalizeMessage,
   textFromParts,
+  listSessions,
+  getSession,
   sendPrompt,
 }

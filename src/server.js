@@ -13,6 +13,7 @@ const { hasValidBearer } = require("./auth")
 const { createObservabilityState } = require("./observability")
 const { prometheusMetrics } = require("./metrics")
 const { startSse, writeSse, endSse } = require("./sse")
+const { handleSessions, handleSessionDetail, handleSessionMessage } = require("./session-api")
 
 const DEFAULT_GATEWAY_HOST = "127.0.0.1"
 const DEFAULT_GATEWAY_PORT = 8088
@@ -210,6 +211,23 @@ function createGatewayServer(options = {}) {
 
     if (req.method === "GET" && url.pathname === "/ocq/logs") {
       json(res, 200, { logs: opts.observability.logs.list() })
+      return
+    }
+
+    const sessionMatch = url.pathname.match(/^\/ocq\/sessions\/([^/]+)$/)
+
+    if (req.method === "GET" && url.pathname === "/ocq/sessions") {
+      await handleSessions(req, res, opts, { json, readJson, errorBody })
+      return
+    }
+
+    if (sessionMatch && req.method === "GET") {
+      await handleSessionDetail(req, res, opts, { json, readJson, errorBody }, decodeURIComponent(sessionMatch[1]))
+      return
+    }
+
+    if (sessionMatch && req.method === "POST") {
+      await handleSessionMessage(req, res, opts, { json, readJson, errorBody }, decodeURIComponent(sessionMatch[1]))
       return
     }
 

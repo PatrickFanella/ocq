@@ -111,3 +111,66 @@ test("GET /metrics exposes Prometheus text", async () => {
     await close(server)
   }
 })
+
+test("GET /ocq/sessions lists all visible sessions", async () => {
+  const { server, url } = await listen(createGatewayServer({
+    gatewayKey: "secret",
+    authHeader: () => "Basic test",
+    listSessions: async () => [{ id: "ses_remote", title: "Remote", createdAt: 1, updatedAt: 2, observeOnly: true }],
+  }))
+  try {
+    const { response, body } = await jsonFetch(`${url}/ocq/sessions`, { headers: { authorization: "Bearer secret" } })
+    assert.equal(response.status, 200)
+    assert.equal(body.sessions[0].id, "ses_remote")
+  } finally {
+    await close(server)
+  }
+})
+
+test("GET /ocq/sessions/:id observes without mutation", async () => {
+  let sent = false
+  const { server, url } = await listen(createGatewayServer({
+    gatewayKey: "secret",
+    authHeader: () => "Basic test",
+    getSession: async () => ({ id: "ses_remote", title: "Remote", observeOnly: true, messages: [{ role: "assistant", content: "hi" }] }),
+    sendPrompt: async () => { sent = true },
+  }))
+  try {
+    const { response, body } = await jsonFetch(`${url}/ocq/sessions/ses_remote`, { headers: { authorization: "Bearer secret" } })
+    assert.equal(response.status, 200)
+    assert.equal(body.session.messages[0].content, "hi")
+    assert.equal(body.mode, "observe_only")
+    assert.equal(sent, false)
+  } finally {
+    await close(server)
+  }
+})
+
+test("POST /ocq/sessions/:id forwards prompt", async () => {
+  let sent = false
+  const { server, url } = await listen(createGatewayServer({
+    gatewayKey: "secret",
+    authHeader: () => "Basic test",
+    sendPrompt: async (input) => {
+      sent = true
+      assert.equal(input.sessionID, "ses_remote")
+      assert.equal(input.prompt, "continue")
+      return { sessionID: "ses_remote", text: "ok" }
+    },
+  }))
+  try {
+    const { response, body } = await jsonFetch(`${url}/ocq/sessions/ses_remote`, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer secret",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ prompt: "continue" }),
+    })
+    assert.equal(response.status, 200)
+    assert.equal(body.sessionID, "ses_remote")
+    assert.equal(sent, true)
+  } finally {
+    await close(server)
+  }
+})
