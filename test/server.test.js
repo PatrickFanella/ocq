@@ -44,6 +44,7 @@ test("POST /v1/chat/completions supports stream true", async () => {
       assert.equal(input.modelID, "gpt-5.4-mini")
       assert.equal(input.providerID, "openai")
       assert.equal(input.prompt, "user: hi there")
+      assert.equal(input.sessionID, "session-incoming")
       return { sessionID: "session-123", text: "hello world" }
     },
   }))
@@ -57,6 +58,7 @@ test("POST /v1/chat/completions supports stream true", async () => {
       body: JSON.stringify({
         model: "openai/gpt-5.4-mini",
         stream: true,
+        ocq_session_id: "session-incoming",
         messages: [{ role: "user", content: "hi there" }],
       }),
     })

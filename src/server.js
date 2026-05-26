@@ -119,6 +119,7 @@ async function handleChatCompletions(req, res, opts) {
         modelID: model.modelID,
         prompt: prompt.prompt,
         system: prompt.system,
+        sessionID: body.ocq_session_id,
       })
       res.setHeader("x-ocq-session", result.sessionID)
       startSse(res)
