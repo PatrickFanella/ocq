@@ -1,7 +1,9 @@
 const { randomUUID } = require("node:crypto")
 
 function parseModelName(model, fallbackProviderID, fallbackModelID) {
-  const value = model || `${fallbackProviderID}/${fallbackModelID}`
+  const value = model === "openai/gpt-4.1-mini" || model === "gpt-4.1-mini"
+    ? "openai/gpt-5.4-mini"
+    : model || `${fallbackProviderID}/${fallbackModelID}`
   const slash = value.indexOf("/")
   if (slash < 0 && fallbackProviderID) {
     return {

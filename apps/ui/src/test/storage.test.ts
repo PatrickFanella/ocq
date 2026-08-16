@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from '../lib/storage'
 
 function createStorage() {
@@ -44,4 +44,13 @@ it('falls back on invalid JSON', () => {
   storage.setItem('ocq.ui.settings.v1', '{')
 
   expect(loadSettings(storage)).toEqual(DEFAULT_SETTINGS)
+})
+
+it('drops saved insecure gateway url on https pages', () => {
+  vi.stubGlobal('location', { protocol: 'https:' })
+  const storage = createStorage()
+  storage.setItem('ocq.ui.settings.v1', JSON.stringify({ baseUrl: 'http://10.0.0.50:3034', refreshMs: 1000, theme: 'dark' }))
+
+  expect(loadSettings(storage).baseUrl).toBe('')
+  vi.unstubAllGlobals()
 })

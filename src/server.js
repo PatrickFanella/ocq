@@ -33,7 +33,22 @@ function getServerOptions(overrides = {}) {
     defaultProviderID: parsedDefault.providerID,
     defaultModelID: parsedDefault.modelID,
     defaultModel: parsedDefault.model,
+    modelAliases: parseModelAliases(overrides.modelAliases || process.env.OCQ_MODEL_ALIASES),
   }
+}
+
+function parseModelAliases(value = "") {
+  const aliases = new Map()
+  for (const entry of String(value).split(",")) {
+    const [from, to] = entry.split("=").map((part) => part?.trim()).filter(Boolean)
+    if (from && to) aliases.set(from, to)
+  }
+  return aliases
+}
+
+function resolveModelAlias(model, aliases) {
+  if (!model) return model
+  return aliases?.get(model) || aliases?.get(String(model).replace(/^openai\//, "")) || model
 }
 
 function json(res, status, body, headers = {}) {
@@ -74,6 +89,15 @@ function requireGatewayAccess(req, res, opts) {
     "www-authenticate": "Bearer",
   })
   return false
+}
+
+function logGatewayError(opts, message, error, meta = {}) {
+  opts.observability?.log?.("error", message, {
+    ...meta,
+    error: error?.message,
+    detail: error?.detail,
+    upstreamStatus: error?.status,
+  })
 }
 
 function readJson(req) {
@@ -120,7 +144,7 @@ async function handleChatCompletions(req, res, opts) {
   let model
   let prompt
   try {
-    model = parseModelName(body.model || opts.defaultModel, opts.defaultProviderID, opts.defaultModelID)
+    model = parseModelName(resolveModelAlias(body.model, opts.modelAliases) || opts.defaultModel, opts.defaultProviderID, opts.defaultModelID)
     prompt = messagesToPrompt(body.messages)
   } catch (error) {
     json(res, 400, errorBody(error.message))
@@ -150,6 +174,10 @@ async function handleChatCompletions(req, res, opts) {
       writeSse(res, "[DONE]")
       endSse(res)
     } catch (error) {
+      logGatewayError(opts, "chat stream upstream failed", error, {
+        model: model.model,
+        sessionID: body.ocq_session_id,
+      })
       if (!res.headersSent) {
         json(res, 500, errorBody(error.message, "server_error"))
       } else if (!res.writableEnded) {
@@ -177,6 +205,7 @@ async function handleChatCompletions(req, res, opts) {
       "x-ocq-session": result.sessionID,
     })
   } catch (error) {
+    logGatewayError(opts, "chat upstream failed", error, { model: model.model })
     json(res, 500, errorBody(error.message, "server_error"))
   }
 }

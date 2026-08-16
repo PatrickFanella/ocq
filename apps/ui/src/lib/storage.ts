@@ -9,17 +9,25 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
 }
 
+function dropMixedContentBaseUrl(settings: Settings): Settings {
+  if (globalThis.location?.protocol === 'https:' && settings.baseUrl.trim().startsWith('http://')) {
+    return { ...settings, baseUrl: '' }
+  }
+
+  return settings
+}
+
 export function loadSettings(storage: Storage = localStorage): Settings {
   const raw = storage.getItem(KEY)
   if (!raw) return DEFAULT_SETTINGS
 
   try {
     const parsed = JSON.parse(raw) as Partial<Settings>
-    return {
+    return dropMixedContentBaseUrl({
       ...DEFAULT_SETTINGS,
       ...parsed,
       apiKey: '',
-    }
+    })
   } catch {
     return DEFAULT_SETTINGS
   }

@@ -16,6 +16,13 @@ function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.replace(/\/+$/, '')
 }
 
+export function resolveBaseUrl(baseUrl: string, location: Pick<Location, 'protocol'> = window.location) {
+  const normalized = normalizeBaseUrl(baseUrl.trim())
+  if (location.protocol !== 'https:' || !normalized.startsWith('http://')) return normalized
+
+  return ''
+}
+
 function mergeHeaders(initHeaders?: HeadersInit) {
   const entries = initHeaders ? new Headers(initHeaders) : new Headers()
   return Object.fromEntries(entries.entries())
@@ -33,7 +40,7 @@ async function parseBody(response: Response) {
 }
 
 export function createGatewayClient(baseUrl: string, apiKey: string) {
-  const root = normalizeBaseUrl(baseUrl)
+  const root = resolveBaseUrl(baseUrl)
   const bearer = apiKey.trim()
 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
