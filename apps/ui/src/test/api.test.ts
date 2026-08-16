@@ -1,5 +1,11 @@
 import { expect, it, vi } from 'vitest'
-import { createGatewayClient, GatewayError } from '../lib/api'
+import { createGatewayClient, GatewayError, resolveBaseUrl } from '../lib/api'
+
+it('falls back to same-origin on https when a saved gateway url is insecure', () => {
+  expect(resolveBaseUrl('http://10.0.0.50:3034/', { protocol: 'https:' })).toBe('')
+  expect(resolveBaseUrl('http://gateway/', { protocol: 'http:' })).toBe('http://gateway')
+  expect(resolveBaseUrl('https://gateway/', { protocol: 'https:' })).toBe('https://gateway')
+})
 
 it('sends bearer auth to metrics endpoint', async () => {
   const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(

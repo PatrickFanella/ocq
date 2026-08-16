@@ -4,7 +4,7 @@
 
 - `ocq` gateway process stays separate from the UI.
 - UI is a static Vite app/container under `apps/ui`.
-- Gateway serves API + ops endpoints; UI talks to it over HTTP.
+- Gateway serves API + ops endpoints; UI talks to it through the same-origin nginx proxy in production.
 
 ## Auth
 
@@ -17,6 +17,8 @@
 - Build UI separately from gateway.
 - Run gateway on private network/host boundary.
 - Put proxy auth in front of the UI.
+- Leave the UI Gateway URL blank in production; `/ocq/*` and `/v1/chat/completions` proxy server-side to the private gateway (`10.0.0.50:3034` currently verified).
+- UI container publishes `3033:80`; do not pin to a host IP unless that address is assigned on the deploy host.
 - Keep API key handling client-side only for the logged-in operator.
 
 ## Metrics / NUC monitoring

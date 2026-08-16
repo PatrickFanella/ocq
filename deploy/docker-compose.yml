@@ -8,11 +8,12 @@ services:
     env_file:
       - ./.env
     environment:
-      OCQ_GATEWAY_HOST: 10.0.0.56
+      OCQ_GATEWAY_HOST: 0.0.0.0
       OCQ_GATEWAY_PORT: 3034
       OPENCODE_SERVER_URL: http://127.0.0.1:4096
       OCQ_ENV_FILE: /run/secrets/opencode-server.env
       OCQ_DEFAULT_DIRECTORY: /home/onnwee
+      OCQ_MODEL_ALIASES: openai/gpt-4.1-mini=openai/gpt-5.4-mini,gpt-4.1-mini=openai/gpt-5.4-mini
     network_mode: host
     volumes:
       - ./opencode-server.env:/run/secrets/opencode-server.env:ro
@@ -24,4 +25,4 @@ services:
     container_name: ocq-ui
     restart: unless-stopped
     ports:
-      - "10.0.0.56:3033:80"
+      - "3033:80"

@@ -58,7 +58,7 @@ export function SettingsPanel({ settings, onChange, onLogin, onLogout }: Setting
             <p className="text-xs uppercase tracking-[0.35em] text-cyan-300/70">settings</p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-50">gateway connection</h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-              Save the URL here. Sign in once with your gateway key and the browser uses a same-origin session cookie.
+              Leave URL blank in production. The UI uses its same-origin gateway proxy and avoids mixed-content requests.
             </p>
           </div>
           <StatusBadge tone="accent">session-ready</StatusBadge>
@@ -71,7 +71,7 @@ export function SettingsPanel({ settings, onChange, onLogin, onLogout }: Setting
               className="rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-slate-100 transition placeholder:text-slate-600 focus-visible:border-cyan-400/50 focus-visible:ring-2 focus-visible:ring-cyan-400/20"
               value={settings.baseUrl}
               onChange={(event: ChangeEvent<HTMLInputElement>) => updateField(settings, onChange, 'baseUrl', event.target.value)}
-              placeholder="http://127.0.0.1:8088"
+              placeholder="blank = same origin"
               spellCheck={false}
             />
           </label>

@@ -1,5 +1,14 @@
 const { authHeader, listSessions, getSession, sendPrompt } = require("./opencode")
 
+function logSessionError(opts, message, error, meta = {}) {
+  opts.observability?.log?.("error", message, {
+    ...meta,
+    error: error?.message,
+    detail: error?.detail,
+    upstreamStatus: error?.status,
+  })
+}
+
 async function handleSessions(req, res, opts, helpers) {
   try {
     const authorization = (opts.authHeader || authHeader)(opts)
@@ -7,6 +16,7 @@ async function handleSessions(req, res, opts, helpers) {
     opts.observability.counters.sessionPollsTotal += 1
     helpers.json(res, 200, { sessions })
   } catch (error) {
+    logSessionError(opts, "session message upstream failed", error, { sessionID })
     helpers.json(res, 500, helpers.errorBody(error.message, "server_error"))
   }
 }
